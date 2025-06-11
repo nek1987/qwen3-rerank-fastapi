@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  qwen3-rerank4b:
+    build: .
+    image: qwen3-rerank4b:latest
+    container_name: qwen3-rerank4b
+    restart: unless-stopped
+    environment:
+      - HF_TOKEN=${HF_TOKEN}          # добавьте в .env или в CI secrets
+      - NVIDIA_VISIBLE_DEVICES=0,1
+      - MODEL_ID=Qwen/Qwen3-Reranker-4B
+    volumes:
+      - /opt/huggingface_cache:/root/.cache/huggingface
+    ports:
+      - "7092:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 2
+              capabilities: ["gpu"]
