@@ -10,7 +10,11 @@ RUN apt-get update && apt-get install -y python3-pip git && \
 WORKDIR /app
 COPY app/requirements.txt .
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir torch==2.3.0+cu121 \
+        --extra-index-url https://download.pytorch.org/whl/cu121 && \
+    pip install --no-cache-dir \
+        git+https://github.com/huggingface/transformers.git@main && \
+    pip install --no-cache-dir -r requirements.txt
 
 COPY app/ .
 

@@ -8,6 +8,7 @@ from transformers import (
     AutoConfig,
     AutoModelForSequenceClassification,
 )
+logging.info(f"🤗 Transformers {transformers.__version__}")
 
 logging.basicConfig(level=logging.INFO)
 
