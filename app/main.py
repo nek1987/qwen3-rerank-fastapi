@@ -26,11 +26,18 @@ print(f"Loading {MODEL_ID} …")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, padding_side="left", use_fast=False, trust_remote_code=True)
 tokenizer.pad_token = tokenizer.eos_token
 
+cfg = AutoConfig.from_pretrained(
+    MODEL_ID,
+    trust_remote_code=True      # ← критичный параметр
+)
+
+
 model = AutoModelForSequenceClassification.from_pretrained(
     MODEL_ID,
-    torch_dtype=torch.bfloat16,   # A40 → BF16
+    config=cfg,                 # обязательно тот же config
+    torch_dtype=torch.bfloat16,
     device_map="auto",
-    trust_remote_code=True,
+    trust_remote_code=True
 ).eval()
 
 #YES_ID  = tokenizer.convert_tokens_to_ids("yes")
