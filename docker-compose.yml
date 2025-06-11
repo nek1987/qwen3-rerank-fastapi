@@ -1,15 +1,14 @@
 version: "3.9"
 
 services:
-  qwen3-rerank4b:
+  qwen3-rerank-fastapi:
     build: .
-    image: qwen3-rerank4b:latest
-    container_name: qwen3-rerank4b
+    image: qwen3-rerank-fastapi:latest
+    container_name: qwen3-rerank
     restart: unless-stopped
     environment:
-      - HF_TOKEN=${HF_TOKEN}          # добавьте в .env или в CI secrets
-      - NVIDIA_VISIBLE_DEVICES=0,1
-      - MODEL_ID=Qwen/Qwen3-Reranker-4B
+      HF_TOKEN: ${HF_TOKEN}
+      NVIDIA_VISIBLE_DEVICES: 0        # выставите карты при желании
     volumes:
       - /opt/huggingface_cache:/root/.cache/huggingface
     ports:
@@ -19,5 +18,5 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              count: 2
+              count: 1
               capabilities: ["gpu"]

@@ -1,55 +1,47 @@
-from typing import List
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
-import torch, math, os
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoConfig
-MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen3-Reranker-4B")
-INSTRUCT = (
-    "Given a web search query, retrieve relevant passages "
-    "that answer the query."
+from typing import List
+import torch, logging
+
+from transformers import (
+    AutoTokenizer,
+    AutoConfig,
+    AutoModelForSequenceClassification,
 )
 
-# --- Prompt templates --------------------------------------------------------
-SYS = (
-    "<|im_start|>system\n"
-    "Judge whether the Document meets the requirements based on the Query "
-    "and the Instruct provided. Answer strictly with \"yes\" or \"no\"."
-    "<|im_end|>\n"
-    "<|im_start|>user\n"
-)
-SUFFIX = "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+logging.basicConfig(level=logging.INFO)
 
-MAX_LEN = 8192   # n_ctx модели (можно меньше для экономии VRAM)
+MODEL_ID = "tomaarsen/Qwen3-Reranker-0.6B-seq-cls"   # seq-cls чек-пойнт
+MAX_LEN  = 8192                                      # хватит для query+doc
 
-# --- Load model --------------------------------------------------------------
-print(f"Loading {MODEL_ID} …")
-tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, padding_side="left", use_fast=False, trust_remote_code=True)
-tokenizer.pad_token = tokenizer.eos_token
-
-cfg = AutoConfig.from_pretrained(
-    MODEL_ID,
-    trust_remote_code=True      # ← критичный параметр
-)
-
-
+# ── загрузка
+tok = AutoTokenizer.from_pretrained(MODEL_ID, padding_side="left")
+cfg = AutoConfig.from_pretrained(MODEL_ID, trust_remote_code=True)
 model = AutoModelForSequenceClassification.from_pretrained(
     MODEL_ID,
-    config=cfg,                 # обязательно тот же config
-    torch_dtype=torch.bfloat16,
+    config=cfg,
+    torch_dtype=torch.bfloat16,     # A40 / 3090 → BF16
     device_map="auto",
-    trust_remote_code=True
 ).eval()
+logging.info("Model loaded OK")
 
-#YES_ID  = tokenizer.convert_tokens_to_ids("yes")
-#NO_ID   = tokenizer.convert_tokens_to_ids("no")
-cls_head = torch.nn.Sigmoid() 
+# ── FastAPI
+app = FastAPI(title="Qwen3-Reranker-0.6B")
 
-def build_pair(query: str, doc: str) -> str:
-    return f"{SYS}<Instruct>: {INSTRUCT}\n<Query>: {query}\n<Document>: {doc}{SUFFIX}"
+class RerankReq(BaseModel):
+    query: str = Field(..., example="largest mobile operator uzbekistan")
+    documents: List[str] = Field(..., min_items=1, example=["Beeline ...", "Ucell ..."])
+    top_n: int = Field(5, ge=1, le=100)
 
+class DocScore(BaseModel):
+    index: int
+    relevance_score: float
+
+@app.post("/v1/rerank", response_model=dict)
 @torch.no_grad()
-def score_pairs(pairs: List[str]) -> List[float]:
-    inputs = tokenizer(
+def rerank(req: RerankReq):
+    pairs = [f"{req.query} </s> {doc}" for doc in req.documents]
+    inputs = tok(
         pairs,
         padding=True,
         truncation="longest_first",
@@ -57,39 +49,14 @@ def score_pairs(pairs: List[str]) -> List[float]:
         return_tensors="pt",
     ).to(model.device)
 
-    logits = model(**inputs).logits.squeeze(-1)          # last token
-    probs = torch.sigmoid(logits)
-    return probs.cpu().float().tolist()
-
-# --- FastAPI schema ----------------------------------------------------------
-class RerankRequest(BaseModel):
-    query: str = Field(..., description="User search query")
-    documents: List[str] = Field(..., description="List of candidate passages")
-    top_n: int = Field(5, ge=1, description="Return N best documents")
-
-class DocScore(BaseModel):
-    index: int
-    relevance_score: float
-
-class RerankResponse(BaseModel):
-    object: str = "rerank_result"
-    data: List[DocScore]
-
-# --- API ---------------------------------------------------------------------
-app = FastAPI(title="Qwen3-4B Cross-Encoder Reranker")
-
-@app.post("/v1/rerank", response_model=RerankResponse, tags=["rerank"])
-def rerank(req: RerankRequest):
-    pairs = [build_pair(req.query, d) for d in req.documents]
-    scores = score_pairs(pairs)
-
-    ranked = sorted(
-        enumerate(scores), key=lambda x: x[1], reverse=True
-    )[: min(req.top_n, len(scores))]
+    logits = model(**inputs).logits.squeeze(-1)       # [B]
+    scores = torch.sigmoid(logits)                    # 0-1 relevance
+    order  = scores.argsort(descending=True)[: req.top_n]
 
     return {
+        "object": "rerank_result",
         "data": [
-            {"index": idx, "relevance_score": round(score, 6)}
-            for idx, score in ranked
-        ]
+            {"index": int(i), "relevance_score": round(float(scores[i]), 6)}
+            for i in order
+        ],
     }
