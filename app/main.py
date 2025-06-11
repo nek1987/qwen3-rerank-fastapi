@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field
 from typing import List
 import torch, logging
+import transformers
 
 from transformers import (
     AutoTokenizer,
