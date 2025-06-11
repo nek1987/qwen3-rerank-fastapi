@@ -2,7 +2,7 @@
 --extra-index-url https://download.pytorch.org/whl/cu121
 
 torch==2.3.0+cu121          --index-url https://download.pytorch.org/whl/cu121
-transformers==4.45.1       # Qwen3 поддержка
+transformers==4.46.1      # Qwen3 поддержка
 accelerate==0.29.3
 fastapi==0.111.0
 uvicorn[standard]==0.29.0
