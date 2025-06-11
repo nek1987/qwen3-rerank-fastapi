@@ -8,7 +8,8 @@ services:
     restart: unless-stopped
     environment:
       HF_TOKEN: ${HF_TOKEN}
-      NVIDIA_VISIBLE_DEVICES: 0        # выставите карты при желании
+      NVIDIA_VISIBLE_DEVICES: 0      # выставите карты при желании
+      RERANK_API_KEY: ${RERANK_API_KEY} 
     volumes:
       - /opt/huggingface_cache:/root/.cache/huggingface
     ports:

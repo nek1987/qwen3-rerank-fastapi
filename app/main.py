@@ -1,8 +1,12 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from pydantic import BaseModel, Field
 from typing import List
 import torch, logging
 import transformers
+from auth import check_key
+
+@app.post("/v1/rerank", dependencies=[Depends(check_key)])
+def rerank(req: RerankReq):
 
 from transformers import (
     AutoTokenizer,
