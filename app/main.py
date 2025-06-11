@@ -2,7 +2,7 @@ from typing import List
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 import torch, math, os
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModel
 
 MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen3-Reranker-4B")
 INSTRUCT = (
@@ -27,22 +27,22 @@ print(f"Loading {MODEL_ID} …")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, padding_side="left", use_fast=False)
 tokenizer.pad_token = tokenizer.eos_token
 
-model = AutoModelForCausalLM.from_pretrained(
+model = AutoModel.from_pretrained(
     MODEL_ID,
     torch_dtype=torch.bfloat16,   # A40 → BF16
     device_map="auto",
     trust_remote_code=True,
 ).eval()
 
-YES_ID  = tokenizer.convert_tokens_to_ids("yes")
-NO_ID   = tokenizer.convert_tokens_to_ids("no")
+#YES_ID  = tokenizer.convert_tokens_to_ids("yes")
+#NO_ID   = tokenizer.convert_tokens_to_ids("no")
+cls_head = torch.nn.Sigmoid() 
 
 def build_pair(query: str, doc: str) -> str:
     return f"{SYS}<Instruct>: {INSTRUCT}\n<Query>: {query}\n<Document>: {doc}{SUFFIX}"
 
 @torch.no_grad()
 def score_pairs(pairs: List[str]) -> List[float]:
-    """Return P('yes') for each query–document pair."""
     inputs = tokenizer(
         pairs,
         padding=True,
@@ -51,10 +51,9 @@ def score_pairs(pairs: List[str]) -> List[float]:
         return_tensors="pt",
     ).to(model.device)
 
-    logits = model(**inputs).logits[:, -1, :]          # last token
-    yes, no = logits[:, YES_ID], logits[:, NO_ID]
-    probs = torch.softmax(torch.stack([no, yes], dim=1), dim=1)[:, 1]
-    return probs.float().tolist()
+    logits = model(**inputs).logits.squeeze(-1)          # last token
+    probs = cls_head(logits)
+    return probs.cpu().float().tolist()
 
 # --- FastAPI schema ----------------------------------------------------------
 class RerankRequest(BaseModel):
