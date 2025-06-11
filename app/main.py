@@ -2,7 +2,7 @@ from typing import List
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 import torch, math, os
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoConfig
 MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen3-Reranker-4B")
 INSTRUCT = (
     "Given a web search query, retrieve relevant passages "
