@@ -2,8 +2,7 @@ from typing import List
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 import torch, math, os
-from transformers import AutoTokenizer, AutoModel
-
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen3-Reranker-4B")
 INSTRUCT = (
     "Given a web search query, retrieve relevant passages "
@@ -24,10 +23,10 @@ MAX_LEN = 8192   # n_ctx модели (можно меньше для эконо
 
 # --- Load model --------------------------------------------------------------
 print(f"Loading {MODEL_ID} …")
-tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, padding_side="left", use_fast=False)
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, padding_side="left", use_fast=False, trust_remote_code=True)
 tokenizer.pad_token = tokenizer.eos_token
 
-model = AutoModel.from_pretrained(
+model = AutoModelForSequenceClassification.from_pretrained(
     MODEL_ID,
     torch_dtype=torch.bfloat16,   # A40 → BF16
     device_map="auto",
@@ -52,7 +51,7 @@ def score_pairs(pairs: List[str]) -> List[float]:
     ).to(model.device)
 
     logits = model(**inputs).logits.squeeze(-1)          # last token
-    probs = cls_head(logits)
+    probs = torch.sigmoid(logits)
     return probs.cpu().float().tolist()
 
 # --- FastAPI schema ----------------------------------------------------------
