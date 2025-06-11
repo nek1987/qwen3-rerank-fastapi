@@ -1,4 +1,4 @@
-# CUDA 12.4 runtime – подходит под Driver >=570
+# ─── CUDA Runtime ─────────────────────────────────────────────────────
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -11,8 +11,12 @@ RUN apt-get update && apt-get install -y python3-pip git && \
 WORKDIR /app
 COPY app/requirements.txt .
 
-RUN pip install --no-cache-dir -r requirements.txt
+# ─── Устанавливаем PyTorch + свежий Transformers ─────────────────────
+RUN pip install --no-cache-dir torch==2.3.0+cu121 \
+        --extra-index-url https://download.pytorch.org/whl/cu121 && \
+    pip install --no-cache-dir \
+        git+https://github.com/huggingface/transformers.git@v4.46.1 && \
+    pip install --no-cache-dir -r requirements.txt
 
 COPY app/ .
-
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
