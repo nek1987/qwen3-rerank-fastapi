@@ -24,7 +24,7 @@ MAX_LEN = 8192   # n_ctx модели (можно меньше для эконо
 
 # --- Load model --------------------------------------------------------------
 print(f"Loading {MODEL_ID} …")
-tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, padding_side="left")
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, padding_side="left", use_fast=False)
 tokenizer.pad_token = tokenizer.eos_token
 
 model = AutoModelForCausalLM.from_pretrained(
